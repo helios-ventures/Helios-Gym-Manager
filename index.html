@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitLife Gym Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>*{font-family:'Inter',system-ui,sans-serif}</style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+    <!-- Hero -->
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-900/40 via-slate-900 to-slate-900"></div>
+        <div class="absolute inset-0" style="background-image:url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')"></div>
+        
+        <nav class="relative z-10 max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6v12M16 6v12"/></svg>
+                </div>
+                <span class="font-bold text-xl">FitLife Gym Manager</span>
+            </div>
+            <div class="hidden md:flex items-center gap-6 text-sm text-slate-300">
+                <a href="#features" class="hover:text-white transition-colors">Features</a>
+                <a href="#modules" class="hover:text-white transition-colors">Modules</a>
+                <a href="#install" class="hover:text-white transition-colors">Installation</a>
+                <a href="#zkteco" class="hover:text-white transition-colors">ZKTeco</a>
+            </div>
+        </nav>
+        
+        <div class="relative z-10 max-w-5xl mx-auto px-6 pt-16 pb-24 text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-blue-300 text-xs font-medium mb-6">
+                <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>
+                Version 1.0.0 - Production Ready
+            </div>
+            <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight mb-6">
+                Complete Gym Management<br>
+                <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Built for Performance</span>
+            </h1>
+            <p class="text-lg text-slate-400 max-w-2xl mx-auto mb-10">
+                A comprehensive PHP-based gym management system with membership tracking, 
+                ZKTeco biometric attendance, point of sale, communications, and detailed reporting.
+            </p>
+            <div class="flex flex-wrap items-center justify-center gap-4">
+                <a href="#install" class="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all transform hover:scale-105 shadow-lg shadow-blue-600/25">
+                    Get Started
+                </a>
+                <a href="#features" class="px-8 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-all">
+                    Explore Features
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="max-w-6xl mx-auto px-6 -mt-12 relative z-20">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 text-center">
+                <p class="text-2xl md:text-3xl font-bold text-blue-400">8</p>
+                <p class="text-xs text-slate-400 mt-1">Core Modules</p>
+            </div>
+            <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 text-center">
+                <p class="text-2xl md:text-3xl font-bold text-green-400">4</p>
+                <p class="text-xs text-slate-400 mt-1">User Roles</p>
+            </div>
+            <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 text-center">
+                <p class="text-2xl md:text-3xl font-bold text-purple-400">ZKTeco</p>
+                <p class="text-xs text-slate-400 mt-1">Biometric Ready</p>
+            </div>
+            <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 text-center">
+                <p class="text-2xl md:text-3xl font-bold text-yellow-400">100%</p>
+                <p class="text-xs text-slate-400 mt-1">Responsive</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features -->
+    <section id="features" class="max-w-7xl mx-auto px-6 py-20">
+        <div class="text-center mb-16">
+            <h2 class="text-3xl font-bold mb-4">Everything You Need</h2>
+            <p class="text-slate-400 max-w-2xl mx-auto">A complete suite of tools to manage your gym efficiently, from member registration to financial reporting.</p>
+        </div>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 hover:border-blue-500/30 transition-colors group">
+                <div class="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
+                    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Membership Management</h3>
+                <p class="text-sm text-slate-400">Member registration, subscription plans, renewals, and weight/BMI tracking with progress charts.</p>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 hover:border-green-500/30 transition-colors group">
+                <div class="w-12 h-12 rounded-lg bg-green-500/10 flex items-center justify-center mb-4 group-hover:bg-green-500/20 transition-colors">
+                    <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Biometric Attendance</h3>
+                <p class="text-sm text-slate-400">ZKTeco fingerprint/face recognition integration with real-time sync and full device user management.</p>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 hover:border-purple-500/30 transition-colors group">
+                <div class="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center mb-4 group-hover:bg-purple-500/20 transition-colors">
+                    <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Point of Sale</h3>
+                <p class="text-sm text-slate-400">Process sales for subscriptions and products with inventory tracking, invoicing, and multiple payment methods.</p>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 hover:border-yellow-500/30 transition-colors group">
+                <div class="w-12 h-12 rounded-lg bg-yellow-500/10 flex items-center justify-center mb-4 group-hover:bg-yellow-500/20 transition-colors">
+                    <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Communication</h3>
+                <p class="text-sm text-slate-400">Bulk SMS, email campaigns, WhatsApp integration, message templates, and chat functionality.</p>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 hover:border-red-500/30 transition-colors group">
+                <div class="w-12 h-12 rounded-lg bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Reports & Analytics</h3>
+                <p class="text-sm text-slate-400">Comprehensive reports with charts. Export to CSV, print view. Member, sales, attendance, and financial reports.</p>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 hover:border-indigo-500/30 transition-colors group">
+                <div class="w-12 h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center mb-4 group-hover:bg-indigo-500/20 transition-colors">
+                    <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Role-Based Access</h3>
+                <p class="text-sm text-slate-400">4 roles: Super Admin, Admin, Staff, Member. Granular permissions for secure access control.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Modules Detail -->
+    <section id="modules" class="max-w-7xl mx-auto px-6 py-20 border-t border-white/10">
+        <div class="text-center mb-16">
+            <h2 class="text-3xl font-bold mb-4">Module Overview</h2>
+            <p class="text-slate-400 max-w-2xl mx-auto">Every module is designed for real-world gym operations.</p>
+        </div>
+        <div class="space-y-6">
+            <!-- Module 1 -->
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 md:p-8 flex flex-col md:flex-row gap-6">
+                <div class="flex-1">
+                    <h3 class="text-xl font-bold mb-3 flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center text-sm">1</span>
+                        Membership Management
+                    </h3>
+                    <ul class="space-y-2 text-sm text-slate-400">
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Member registration with auto-generated unique codes</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Subscription plans: Daily, Weekly, Monthly, Quarterly, Half-Yearly, Annual</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Subscription renewals with payment tracking</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Weight loss management with BMI calculation and progress charts</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Emergency contacts, health notes, fitness goals</li>
+                    </ul>
+                </div>
+            </div>
+            <!-- Module 2 -->
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 md:p-8 flex flex-col md:flex-row gap-6">
+                <div class="flex-1">
+                    <h3 class="text-xl font-bold mb-3 flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-green-500 text-white flex items-center justify-center text-sm">2</span>
+                        Attendance with ZKTeco Biometric Devices
+                    </h3>
+                    <ul class="space-y-2 text-sm text-slate-400">
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Real-time attendance tracking via ZKTeco fingerprint/face devices</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><strong>Full CRUD on device users</strong>: Create, modify, enable/disable, delete users</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Device management: Test connection, sync users, restart, configure</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Manual check-in/check-out support with type tracking</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Auto-checkout and late arrival detection</li>
+                    </ul>
+                </div>
+            </div>
+            <!-- Module 3 -->
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 md:p-8 flex flex-col md:flex-row gap-6">
+                <div class="flex-1">
+                    <h3 class="text-xl font-bold mb-3 flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-purple-500 text-white flex items-center justify-center text-sm">3</span>
+                        Point of Sale
+                    </h3>
+                    <ul class="space-y-2 text-sm text-slate-400">
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Product sales with inventory management and low stock alerts</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Subscription sales and renewals at the counter</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Shopping cart with tax calculation and discounts</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Multiple payment methods: Cash, Card, M-Pesa, Mobile Money, Bank Transfer</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Invoice generation with printable receipts</li>
+                    </ul>
+                </div>
+            </div>
+            <!-- Module 4 -->
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6 md:p-8 flex flex-col md:flex-row gap-6">
+                <div class="flex-1">
+                    <h3 class="text-xl font-bold mb-3 flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-yellow-500 text-white flex items-center justify-center text-sm">4</span>
+                        Communication
+                    </h3>
+                    <ul class="space-y-2 text-sm text-slate-400">
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Bulk SMS messaging with personalized variables</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Bulk email campaigns with HTML templates</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>WhatsApp Business API integration ready</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Message templates with variables ({first_name}, {gym_name})</li>
+                        <li class="flex items-start gap-2"><svg class="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Chat functionality for member-staff communication</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ZKTeco Section -->
+    <section id="zkteco" class="max-w-7xl mx-auto px-6 py-20 border-t border-white/10">
+        <div class="bg-gradient-to-br from-indigo-900/30 to-blue-900/30 border border-indigo-500/20 rounded-2xl p-8 md:p-12">
+            <div class="flex flex-col md:flex-row gap-8 items-center">
+                <div class="flex-1">
+                    <h2 class="text-3xl font-bold mb-4">ZKTeco Biometric Integration</h2>
+                    <p class="text-slate-400 mb-6">Connect your ZKTeco fingerprint or face recognition devices for seamless attendance tracking. Full device user management is built-in.</p>
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div class="bg-white/5 rounded-lg p-4">
+                            <h4 class="font-semibold text-indigo-300 mb-2">Device Management</h4>
+                            <p class="text-xs text-slate-400">Add multiple devices, test connections, sync data, restart remotely</p>
+                        </div>
+                        <div class="bg-white/5 rounded-lg p-4">
+                            <h4 class="font-semibold text-indigo-300 mb-2">User CRUD</h4>
+                            <p class="text-xs text-slate-400">Create, modify, enable/disable, delete users on the device from the system</p>
+                        </div>
+                        <div class="bg-white/5 rounded-lg p-4">
+                            <h4 class="font-semibold text-indigo-300 mb-2">Attendance Sync</h4>
+                            <p class="text-xs text-slate-400">Pull attendance logs from device to database with one click</p>
+                        </div>
+                        <div class="bg-white/5 rounded-lg p-4">
+                            <h4 class="font-semibold text-indigo-300 mb-2">Real-time Tracking</h4>
+                            <p class="text-xs text-slate-400">Monitor who is currently checked in, duration tracking</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-shrink-0">
+                    <div class="w-48 h-48 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-indigo-500/30">
+                        <svg class="w-24 h-24 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.131A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.2-2.85.577-4.147l.09-.031M3 15.364a21.086 21.086 0 01-1.236-2.395m4.395 5.631a20.903 20.903 0 01-3.16-2.725"/></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation -->
+    <section id="install" class="max-w-4xl mx-auto px-6 py-20 border-t border-white/10">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold mb-4">Installation Guide</h2>
+            <p class="text-slate-400">Get your gym management system running in minutes.</p>
+        </div>
+        <div class="space-y-6">
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+                <h3 class="font-semibold text-lg mb-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">1</span>System Requirements</h3>
+                <ul class="text-sm text-slate-400 space-y-1 ml-8">
+                    <li>PHP 7.4+ (PHP 8.x recommended)</li>
+                    <li>MySQL 5.7+ or MariaDB 10.2+</li>
+                    <li>Apache with mod_rewrite enabled</li>
+                    <li>ZKTeco device (optional, for biometric attendance)</li>
+                </ul>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+                <h3 class="font-semibold text-lg mb-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">2</span>Database Setup</h3>
+                <pre class="bg-slate-800 rounded-lg p-4 text-xs text-green-400 font-mono overflow-x-auto">mysql -u root -p
+CREATE DATABASE gym_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE gym_management;
+SOURCE database.sql;</pre>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+                <h3 class="font-semibold text-lg mb-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">3</span>Configure Database</h3>
+                <p class="text-sm text-slate-400 mb-3 ml-8">Edit <code class="bg-slate-800 px-2 py-1 rounded text-xs">config/database.php</code> with your credentials:</p>
+                <pre class="bg-slate-800 rounded-lg p-4 text-xs text-blue-400 font-mono overflow-x-auto">define('DB_HOST', 'localhost');
+define('DB_NAME', 'gym_management');
+define('DB_USER', 'your_username');
+define('DB_PASS', 'your_password');</pre>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+                <h3 class="font-semibold text-lg mb-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">4</span>Login</h3>
+                <p class="text-sm text-slate-400 ml-8">Access the system and login with default credentials:</p>
+                <div class="ml-8 mt-2 bg-slate-800 rounded-lg p-4 text-sm">
+                    <p class="text-slate-300">Username: <span class="text-white font-mono">superadmin</span></p>
+                    <p class="text-slate-300">Password: <span class="text-white font-mono">password</span></p>
+                    <p class="text-yellow-400 text-xs mt-2">Important: Change default password after first login!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/10 py-12 text-center">
+        <p class="text-slate-500 text-sm">FitLife Gym Management System v1.0.0</p>
+        <p class="text-slate-600 text-xs mt-1">A comprehensive PHP gym management solution</p>
+    </footer>
+</body>
+</html>

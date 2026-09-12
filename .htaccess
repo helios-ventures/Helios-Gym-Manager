@@ -1,0 +1,54 @@
+# Gym Management System - URL Rewriting & Security
+# WAMP | Apache 2.4.62 | PHP 8.3.14 (mod_php) | localhost/gym-management/
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /gym-management/
+    
+	# Protect sensitive directories
+RewriteRule ^(config|core|includes|vendor)/ - [F,L]
+    
+    # Deny access to .git, .env, .sql, .log files
+    RewriteRule \.(git|env|sql|log)$ - [F,L]
+    
+    # Route non-file/directory requests to index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . index.php [L]
+</IfModule>
+
+# Disable directory browsing
+Options -Indexes
+
+# Apache 2.4 syntax
+<FilesMatch "^\.">
+    Require all granted
+</FilesMatch>
+
+# PHP Settings (works because you use PHP as Apache module)
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    
+    # Development only
+    php_flag display_errors On
+    php_value error_reporting E_ALL
+</IfModule>
+
+# Enable gzip compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Browser caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+</IfModule>
+
+ServerSignature Off

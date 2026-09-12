@@ -1,4 +1,4 @@
-# FitLife Gym Management System
+# Helios Gym Management System
 
 A comprehensive PHP-based gym management system with membership management, ZKTeco biometric attendance tracking, point of sale, communication tools, reporting, and role-based access control.
 

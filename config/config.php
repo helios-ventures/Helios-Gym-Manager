@@ -87,3 +87,4 @@ require_once CORE_PATH . '/Helper.php';
 require_once CORE_PATH . '/Validator.php';
 require_once CORE_PATH . '/Response.php';
 require_once CORE_PATH . '/ZKTeco.php';
+require_once CORE_PATH . '/Hikvision.php';

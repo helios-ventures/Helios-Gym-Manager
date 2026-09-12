@@ -1,6 +1,7 @@
 <?php
 /**
- * ZKTeco Device Management - CRUD operations for biometric devices
+ * Hikvision Device Management - CRUD operations for access-control terminals
+ * (DS-K1T343MFWX / DS-K1T671 series)
  */
 
 require_once dirname(__DIR__, 2) . '/config/config.php';
@@ -9,46 +10,66 @@ use Gym\Core\Auth;
 use Gym\Core\Database;
 use Gym\Core\Helper;
 use Gym\Core\Session;
-use Gym\Core\ZKTeco;
+use Gym\Core\Hikvision;
 
 Auth::requirePermission('attendance', 'manage');
 
-$pageTitle = 'ZKTeco Device Management';
-$pageDescription = 'Manage biometric devices and users';
+$pageTitle = 'Hikvision Device Management';
+$pageDescription = 'Manage access-control terminals and users';
+
+/**
+ * Build a Hikvision client from a device row, or null (with a flash message)
+ * if the row is missing credentials.
+ */
+function hikvisionFromDevice(array $device): ?Hikvision
+{
+    if (empty($device['device_username']) || empty($device['device_password'])) {
+        Session::setFlash('danger', "Device '{$device['device_name']}' is missing a username/password - edit it first.");
+        return null;
+    }
+
+    return new Hikvision(
+        $device['device_ip'],
+        $device['device_username'],
+        $device['device_password'],
+        (int)($device['port'] ?: 80)
+    );
+}
 
 // Test connection
 if (isset($_GET['test']) && $deviceId = intval($_GET['test'])) {
     $device = Database::fetchOne("SELECT * FROM zkteco_devices WHERE id = ?", [$deviceId]);
+
     if ($device) {
-        $result = ZKTeco::testConnection($device['device_ip'], $device['port']);
-        
-        if ($result['success']) {
-            Database::execute("UPDATE zkteco_devices SET status = 'online', last_sync = NOW() WHERE id = ?", [$deviceId]);
-            Session::setFlash('success', 'Connection successful! Device is online.');
-        } else {
-            Database::execute("UPDATE zkteco_devices SET status = 'offline' WHERE id = ?", [$deviceId]);
-            Session::setFlash('danger', 'Connection failed: ' . $result['message']);
+        $hik = hikvisionFromDevice($device);
+
+        if ($hik) {
+            $result = $hik->testConnection();
+
+            if ($result['success']) {
+                Database::execute("UPDATE zkteco_devices SET status = 'online', last_sync = NOW() WHERE id = ?", [$deviceId]);
+                Session::setFlash('success', 'Connection successful! Device is online.');
+            } else {
+                Database::execute("UPDATE zkteco_devices SET status = 'offline' WHERE id = ?", [$deviceId]);
+                Session::setFlash('danger', 'Connection failed: ' . $result['message']);
+            }
         }
     }
     header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
     exit;
 }
 
-// Sync device users from DB
+// Sync device users from DB (push active members, disable expired/inactive/suspended ones)
 if (isset($_GET['sync_users']) && $deviceId = intval($_GET['sync_users'])) {
 
-    $device = Database::fetchOne(
-        "SELECT * FROM zkteco_devices WHERE id = ?",
-        [$deviceId]
-    );
+    $device = Database::fetchOne("SELECT * FROM zkteco_devices WHERE id = ?", [$deviceId]);
 
     if ($device) {
+        $hik = hikvisionFromDevice($device);
 
-        $zk = new ZKTeco($device['device_ip'], $device['port']);
+        if ($hik) {
 
-        if ($zk->connect()) {
-
-            // Fetch ALL biometric members
+            // Fetch ALL members that have a biometric ID assigned
             $members = Database::fetchAll("
                 SELECT 
                     id,
@@ -63,58 +84,35 @@ if (isset($_GET['sync_users']) && $deviceId = intval($_GET['sync_users'])) {
 
             $activeMembers = [];
             $disabledCount = 0;
+            $disableFailures = 0;
 
             foreach ($members as $member) {
 
-                $isExpired = false;
+                $isExpired = !empty($member['expiry_date'])
+                    && strtotime($member['expiry_date']) < strtotime(date('Y-m-d'));
 
-                if (!empty($member['expiry_date'])) {
-                    $isExpired = strtotime($member['expiry_date']) < strtotime(date('Y-m-d'));
-                }
+                if ($isExpired || in_array($member['status'], ['expired', 'inactive', 'suspended'], true)) {
+                    $name = trim($member['first_name'] . ' ' . $member['last_name']);
+                    $result = $hik->disableUser($member['biometric_id'], $name);
 
-                // Disable expired/suspended/inactive members
-                if (
-                    $isExpired ||
-                    in_array($member['status'], ['expired', 'inactive', 'suspended'])
-                ) {
-
-                    // Disable on biometric
-                    if (method_exists($zk, 'disableUser')) {
-                        $zk->disableUser($member['biometric_id']);
-                    }
-
-                    $disabledCount++;
+                    $result['success'] ? $disabledCount++ : $disableFailures++;
                     continue;
                 }
 
-                // Active member → allow sync
                 $activeMembers[] = $member;
             }
 
-            // Push ONLY active members to biometric
-            $result = $zk->syncUsersFromDb($activeMembers);
+            // Push/update active members as enabled users
+            $result = $hik->syncUsersFromDb($activeMembers);
 
-            $zk->disconnect();
+            Database::execute("UPDATE zkteco_devices SET last_sync = NOW() WHERE id = ?", [$deviceId]);
 
-            Database::execute(
-                "UPDATE zkteco_devices 
-                 SET last_sync = NOW() 
-                 WHERE id = ?",
-                [$deviceId]
-            );
+            $message = $result['message'] . " Disabled {$disabledCount} expired/inactive user(s).";
+            if ($disableFailures > 0) {
+                $message .= " ({$disableFailures} disable call(s) failed - check error log.)";
+            }
 
-            Session::setFlash(
-                $result['success'] ? 'success' : 'warning',
-                $result['message'] . 
-                " Disabled {$disabledCount} expired/inactive users."
-            );
-
-        } else {
-
-            Session::setFlash(
-                'danger',
-                'Failed to connect to device'
-            );
+            Session::setFlash($result['success'] ? 'success' : 'warning', $message);
         }
     }
 
@@ -125,58 +123,49 @@ if (isset($_GET['sync_users']) && $deviceId = intval($_GET['sync_users'])) {
 // Restart device
 if (isset($_GET['restart']) && $deviceId = intval($_GET['restart'])) {
     $device = Database::fetchOne("SELECT * FROM zkteco_devices WHERE id = ?", [$deviceId]);
+
     if ($device) {
-        $zk = new ZKTeco($device['device_ip'], $device['port']);
-        if ($zk->connect()) {
-            $result = $zk->restart();
-            Session::setFlash('success', $result['message']);
-        } else {
-            Session::setFlash('danger', 'Failed to connect to device');
+        $hik = hikvisionFromDevice($device);
+
+        if ($hik) {
+            $result = $hik->restart();
+            Session::setFlash($result['success'] ? 'success' : 'danger', $result['message']);
         }
     }
     header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
     exit;
 }
 
-// Pull attendance data from device
+// Pull access events (door punches) from device
 if (isset($_GET['sync']) && $_GET['sync'] === 'device') {
 
     $device = Database::fetchOne(
-        "SELECT * FROM zkteco_devices
-         WHERE is_default = 1 OR status = 'online'
-         LIMIT 1"
+        "SELECT * FROM zkteco_devices WHERE is_default = 1 OR status = 'online' LIMIT 1"
     );
 
     if (!$device) {
-
         Session::setFlash('danger', 'No device configured or online');
-
         header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
         exit;
     }
 
-    $zk = new ZKTeco($device['device_ip'], (int)$device['port']);
+    $hik = hikvisionFromDevice($device);
 
-    if (!$zk->connect()) {
-
-        Session::setFlash(
-            'danger',
-            'Failed to connect to device at ' .
-            $device['device_ip'] . ':' . $device['port']
-        );
-
+    if (!$hik) {
         header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
         exit;
     }
 
-    $records = $zk->getAttendance();
+    // Pull since the last successful sync, capped at 7 days back the first time
+    $since = $device['last_sync']
+        ? date('Y-m-d\TH:i:sP', strtotime($device['last_sync']))
+        : date('Y-m-d\TH:i:sP', strtotime('-7 days'));
 
-    $zk->disconnect();
+    $records = $hik->getAccessEvents($since);
 
     if (empty($records)) {
-
-        Session::setFlash('warning', 'No attendance records found on device');
-
+        Database::execute("UPDATE zkteco_devices SET last_sync = NOW() WHERE id = ?", [$device['id']]);
+        Session::setFlash('warning', 'No new access events found on device');
         header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
         exit;
     }
@@ -185,13 +174,10 @@ if (isset($_GET['sync']) && $_GET['sync'] === 'device') {
     $updated = 0;
     $skipped = 0;
 
-    foreach ($records as $idx => $r) {
+    foreach ($records as $r) {
 
-        $bioId = intval($r['id'] ?? ($r['userid'] ?? 0));
-
-        $rawTime = $r['timestamp'] ?? ($r['punch_time'] ?? '');
-
-        $ts = strtotime($rawTime);
+        $bioId = intval($r['employeeNo'] ?? 0);
+        $ts = strtotime($r['timestamp'] ?? '');
 
         if (!$bioId || !$ts) {
             $skipped++;
@@ -200,18 +186,9 @@ if (isset($_GET['sync']) && $_GET['sync'] === 'device') {
 
         $punchTime = date('Y-m-d H:i:s', $ts);
 
-        /*
-        |--------------------------------------------------------------------------
-        | MEMBER LOOKUP
-        |--------------------------------------------------------------------------
-        | Unknown IDs are ignored silently
-        */
-
+        // MEMBER LOOKUP - unknown IDs are ignored silently
         $member = Database::fetchOne(
-            "SELECT id
-             FROM members
-             WHERE biometric_id = ?
-             LIMIT 1",
+            "SELECT id FROM members WHERE biometric_id = ? LIMIT 1",
             [$bioId]
         );
 
@@ -222,18 +199,9 @@ if (isset($_GET['sync']) && $_GET['sync'] === 'device') {
 
         $memberId = $member['id'];
 
-        /*
-        |--------------------------------------------------------------------------
-        | DUPLICATE CHECK
-        |--------------------------------------------------------------------------
-        */
-
+        // DUPLICATE CHECK
         $duplicate = Database::fetchOne(
-            "SELECT id
-             FROM attendance_logs
-             WHERE biometric_id = ?
-             AND check_in = ?
-             LIMIT 1",
+            "SELECT id FROM attendance_logs WHERE biometric_id = ? AND check_in = ? LIMIT 1",
             [$bioId, $punchTime]
         );
 
@@ -242,108 +210,53 @@ if (isset($_GET['sync']) && $_GET['sync'] === 'device') {
             continue;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | CHECK TYPE
-        |--------------------------------------------------------------------------
-        */
-
-        $type = intval($r['type'] ?? 0);
-
-        $checkType = 'fingerprint';
-
-        if (in_array($type, [1, 2])) {
+        // CHECK TYPE - Hikvision face terminals report a verify mode string
+        $verifyMode = strtolower($r['verify_mode'] ?? '');
+        $checkType = 'face';
+        if (strpos($verifyMode, 'card') !== false) {
             $checkType = 'card';
-        } elseif ($type == 3) {
-            $checkType = 'face';
+        } elseif (strpos($verifyMode, 'fp') !== false || strpos($verifyMode, 'finger') !== false) {
+            $checkType = 'fingerprint';
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | AUTO TOGGLE LOGIC
-        |--------------------------------------------------------------------------
-        | First punch = check in
-        | Next punch = check out
-        */
-
+        // AUTO TOGGLE LOGIC - first punch = check in, next punch = check out
         $openAttendance = Database::fetchOne(
-            "SELECT id, check_in
-             FROM attendance_logs
-             WHERE biometric_id = ?
-             AND check_out IS NULL
-             ORDER BY check_in DESC
-             LIMIT 1",
+            "SELECT id, check_in FROM attendance_logs 
+             WHERE biometric_id = ? AND check_out IS NULL 
+             ORDER BY check_in DESC LIMIT 1",
             [$bioId]
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | CHECK OUT
-        |--------------------------------------------------------------------------
-        */
-
         if ($openAttendance) {
-
             $checkInTime = strtotime($openAttendance['check_in']);
             $checkOutTime = strtotime($punchTime);
 
-            // Ignore impossible checkout
             if ($checkOutTime <= $checkInTime) {
                 $skipped++;
                 continue;
             }
 
-            $duration = round(
-                ($checkOutTime - $checkInTime) / 60
-            );
+            $duration = round(($checkOutTime - $checkInTime) / 60);
 
             Database::execute(
-                "UPDATE attendance_logs
-                 SET
-                    check_out = ?,
-                    duration_minutes = ?,
-                    status = 'present'
-                 WHERE id = ?",
-                [
-                    $punchTime,
-                    $duration,
-                    $openAttendance['id']
-                ]
+                "UPDATE attendance_logs SET check_out = ?, duration_minutes = ?, status = 'present' WHERE id = ?",
+                [$punchTime, $duration, $openAttendance['id']]
             );
 
             $updated++;
-
             continue;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | CHECK IN
-        |--------------------------------------------------------------------------
-        */
-
         Database::execute(
-            "INSERT INTO attendance_logs
-            (
-                member_id,
-                biometric_id,
-                device_id,
-                check_in,
-                check_type,
-                status
-            )
-            VALUES (?, ?, ?, ?, ?, 'present')",
-            [
-                $memberId,
-                $bioId,
-                $device['id'],
-                $punchTime,
-                $checkType
-            ]
+            "INSERT INTO attendance_logs (member_id, biometric_id, device_id, check_in, check_type, status)
+             VALUES (?, ?, ?, ?, ?, 'present')",
+            [$memberId, $bioId, $device['id'], $punchTime, $checkType]
         );
 
         $inserted++;
     }
+
+    Database::execute("UPDATE zkteco_devices SET last_sync = NOW() WHERE id = ?", [$device['id']]);
 
     Session::setFlash(
         'success',
@@ -360,27 +273,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $deviceId = intval($_POST['device_id'] ?? 0);
     $name = trim($_POST['device_name'] ?? '');
     $ip = trim($_POST['device_ip'] ?? '');
-    $port = intval($_POST['port'] ?? 4370);
+    $port = intval($_POST['port'] ?? 80);
     $location = trim($_POST['location'] ?? '');
     $isDefault = isset($_POST['is_default']) ? 1 : 0;
-    
+
+    // Hikvision-specific fields
+    $deviceType = trim($_POST['device_type'] ?? 'hikvision') ?: 'hikvision';
+    $deviceUsername = trim($_POST['device_username'] ?? '');
+    $devicePassword = trim($_POST['device_password'] ?? '');
+
     if (empty($name) || empty($ip)) {
         Session::setFlash('danger', 'Device name and IP address are required');
+    } elseif (empty($deviceUsername) || empty($devicePassword)) {
+        Session::setFlash('danger', 'Username and password are required for Hikvision devices');
     } else {
         if ($isDefault) {
             Database::execute("UPDATE zkteco_devices SET is_default = 0");
         }
-        
+
         if ($deviceId) {
             Database::execute(
-                "UPDATE zkteco_devices SET device_name = ?, device_ip = ?, port = ?, location = ?, is_default = ? WHERE id = ?",
-                [$name, $ip, $port, $location, $isDefault, $deviceId]
+                "UPDATE zkteco_devices 
+                 SET device_name = ?, device_type = ?, device_ip = ?, port = ?, 
+                     device_username = ?, device_password = ?, location = ?, is_default = ? 
+                 WHERE id = ?",
+                [$name, $deviceType, $ip, $port, $deviceUsername, $devicePassword, $location, $isDefault, $deviceId]
             );
             Session::setFlash('success', 'Device updated successfully');
         } else {
             Database::insert(
-                "INSERT INTO zkteco_devices (device_name, device_ip, port, location, is_default) VALUES (?, ?, ?, ?, ?)",
-                [$name, $ip, $port, $location, $isDefault]
+                "INSERT INTO zkteco_devices 
+                    (device_name, device_type, device_ip, port, device_username, device_password, location, is_default) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [$name, $deviceType, $ip, $port, $deviceUsername, $devicePassword, $location, $isDefault]
             );
             Session::setFlash('success', 'Device added successfully');
         }
@@ -415,7 +340,6 @@ $members = Database::fetchAll(
      LIMIT 500"
 );
 
-
 // Get default device info for user management
 $defaultDevice = Database::fetchOne("SELECT * FROM zkteco_devices WHERE is_default = 1 OR status = 'online' LIMIT 1");
 
@@ -435,24 +359,37 @@ require_once INCLUDES_PATH . '/sidebar.php';
             </h3>
             <form method="POST" action="" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input type="hidden" name="device_id" value="<?php echo $editDevice['id'] ?? ''; ?>">
+                <input type="hidden" name="device_type" value="hikvision">
                 
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Device Name</label>
                     <input type="text" name="device_name" value="<?php echo htmlspecialchars($editDevice['device_name'] ?? ''); ?>" required
                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                           placeholder="e.g. Main Entrance Device">
+                           placeholder="e.g. Main Entrance Terminal">
                 </div>
                 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
                     <input type="text" name="device_ip" value="<?php echo htmlspecialchars($editDevice['device_ip'] ?? ''); ?>" required
                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                           placeholder="e.g. 192.168.1.100">
+                           placeholder="e.g. 10.0.8.200">
                 </div>
                 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
-                    <input type="number" name="port" value="<?php echo $editDevice['port'] ?? 4370; ?>"
+                    <input type="number" name="port" value="<?php echo $editDevice['port'] ?? 80; ?>"
+                           class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input type="text" name="device_username" value="<?php echo htmlspecialchars($editDevice['device_username'] ?? ''); ?>" required
+                           class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                           placeholder="e.g. admin">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" name="device_password" value="<?php echo htmlspecialchars($editDevice['device_password'] ?? ''); ?>" required
                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500">
                 </div>
                 
@@ -572,7 +509,6 @@ require_once INCLUDES_PATH . '/sidebar.php';
                             <option value="">Choose member...</option>
                             <?php foreach ($members as $m): ?>
                                 <?php 
-                                // Use biometric_id if set, otherwise fall back to member id
                                 $displayBioId = !empty($m['biometric_id']) ? $m['biometric_id'] : $m['id'];
                                 ?>
                                 <option value="<?php echo $m['id']; ?>" data-biometric="<?php echo $displayBioId; ?>">
@@ -584,7 +520,7 @@ require_once INCLUDES_PATH . '/sidebar.php';
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Biometric ID</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Biometric / Employee ID</label>
                     <input type="number" id="biometricId" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Auto or enter ID">
                 </div>
                 <div class="grid grid-cols-2 gap-2">
@@ -638,7 +574,7 @@ require_once INCLUDES_PATH . '/sidebar.php';
                     </a>
                 <?php endforeach; ?>
                 <a href="?sync=device" class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-blue-50 transition-colors">
-                    <span class="text-sm font-medium text-red-700">Pull attendance data</span>
+                    <span class="text-sm font-medium text-red-700">Pull access events</span>
                     <i data-lucide="download" class="w-4 h-4 text-gray-400"></i>
                 </a>
             </div>
@@ -672,12 +608,11 @@ async function manageDeviceUser(action) {
     formData.append('biometric_id', biometricId);
     
     try {
-        const response = await fetch('<?php echo API_URL; ?>/zkteco-user.php', {
+        const response = await fetch('<?php echo API_URL; ?>/hikvision-user.php', {
             method: 'POST',
             body: formData
         });
         
-        // Check if PHP crashed (404, 500, etc.)
         if (!response.ok) {
             const text = await response.text();
             console.error('Server returned ' + response.status + ':', text.substring(0, 500));

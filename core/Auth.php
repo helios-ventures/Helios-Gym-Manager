@@ -287,6 +287,8 @@ class Auth {
                     ['title' => 'Add Member', 'url' => '/modules/members/create.php', 'action' => 'create'],
                     ['title' => 'Subscriptions', 'url' => '/modules/members/subscriptions.php', 'action' => 'view'],
                     ['title' => 'Weight Tracking', 'url' => '/modules/members/weight-tracking.php', 'action' => 'view'],
+                    ['title' => 'Active Members', 'url' => '/modules/members/access-active.php', 'action' => 'view'],
+                    ['title' => 'Disabled/Expired Members', 'url' => '/modules/members/access-disabled.php', 'action' => 'view'],
                 ]
             ],
             [

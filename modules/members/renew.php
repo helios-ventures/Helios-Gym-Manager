@@ -3,6 +3,9 @@ require_once dirname(__DIR__, 2) . '/config/config.php';
 use Gym\Core\Auth;
 use Gym\Core\Database;
 use Gym\Core\Helper;
+use Gym\Core\MemberAccess;
+use Gym\Core\Session;
+
 Auth::requirePermission('members', 'edit');
 $memberId = intval($_GET['id'] ?? 0);
 $member = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$memberId]);
@@ -19,7 +22,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     Database::execute("UPDATE member_subscriptions SET status='expired' WHERE member_id=? AND status='active'", [$memberId]);
     Database::insert("INSERT INTO member_subscriptions (member_id, plan_id, start_date, end_date, amount_paid, payment_method, status, created_by) VALUES (?, ?, ?, ?, ?, ?, 'active', ?)", [$memberId, $planId, $startDate, $endDate, $plan['price'], $_POST['payment_method'] ?? 'cash', \Gym\Core\Auth::id()]);
     Database::execute("UPDATE members SET expiry_date=?, status='active' WHERE id=?", [$endDate, $memberId]);
-    
+
+    // Restore biometric door access now that the membership is active again.
+    // Re-fetch the member so MemberAccess sees the freshly updated row.
+    $renewedMember = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$memberId]);
+    if (!empty($renewedMember['biometric_id'])) {
+        $accessResult = MemberAccess::enable($renewedMember);
+        if (!$accessResult['success']) {
+            Session::setFlash('warning', 'Renewed, but device access sync failed: ' . $accessResult['message'] . '. Retry from the member profile.');
+        }
+    }
+
     \Gym\Core\Auth::logActivity('subscription_renew', "Renewed subscription for {$member['member_code']}");
     Helper::redirect('/modules/members/view.php?id=' . $memberId, 'success', 'Subscription renewed successfully! New expiry: ' . Helper::date($endDate));
 }

@@ -144,6 +144,59 @@ $daysUntil = $member['expiry_date'] ? Helper::daysUntil($member['expiry_date']) 
                 <p class="text-xs text-gray-500 mt-4 text-center">Last visit: <?php echo Helper::relativeTime($attendanceStats['last_visit']); ?></p>
             <?php endif; ?>
         </div>
+
+        <!-- Biometric Access Card -->
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900 flex items-center gap-2">
+                    <i data-lucide="fingerprint" class="w-5 h-5 text-indigo-500"></i>
+                    Biometric Access
+                </h3>
+                <?php if (!empty($member['biometric_enabled'])): ?>
+                    <span class="badge-success px-2.5 py-1 text-xs rounded-full border inline-flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Enabled
+                    </span>
+                <?php else: ?>
+                    <span class="badge-danger px-2.5 py-1 text-xs rounded-full border inline-flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Disabled
+                    </span>
+                <?php endif; ?>
+            </div>
+
+            <?php if (empty($member['biometric_id'])): ?>
+                <p class="text-sm text-gray-500">No biometric/employee ID assigned to this member yet. Add one from <a href="<?php echo BASE_URL; ?>/modules/attendance/devices.php" class="text-blue-600 hover:underline">Device Management</a>.</p>
+            <?php else: ?>
+                <div class="space-y-2 text-sm mb-4">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Employee / Biometric ID</span>
+                        <span class="font-mono font-medium"><?php echo htmlspecialchars($member['biometric_id']); ?></span>
+                    </div>
+                    <?php if (empty($member['biometric_enabled']) && !empty($member['disabled_reason'])): ?>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Reason</span>
+                            <span class="font-medium"><?php echo $member['disabled_reason'] === 'expired' ? 'Membership expired' : 'Manually disabled'; ?></span>
+                        </div>
+                    <?php endif; ?>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Last synced to device</span>
+                        <span class="font-medium"><?php echo !empty($member['biometric_synced_at']) ? Helper::relativeTime($member['biometric_synced_at']) : 'Never'; ?></span>
+                    </div>
+                </div>
+
+                <?php if (($member['disabled_reason'] ?? '') === 'expired'): ?>
+                    <p class="text-xs text-amber-600 mb-3">Access was disabled automatically because this membership expired. Renewing restores it.</p>
+                <?php endif; ?>
+
+                <button type="button" id="accessToggleBtn"
+                        data-member-id="<?php echo $member['id']; ?>"
+                        data-current-state="<?php echo !empty($member['biometric_enabled']) ? 'enabled' : 'disabled'; ?>"
+                        class="w-full py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors
+                               <?php echo !empty($member['biometric_enabled']) ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'; ?>">
+                    <i data-lucide="<?php echo !empty($member['biometric_enabled']) ? 'lock' : 'unlock'; ?>" class="w-4 h-4"></i>
+                    <?php echo !empty($member['biometric_enabled']) ? 'Disable Access' : 'Enable Access'; ?>
+                </button>
+            <?php endif; ?>
+        </div>
     </div>
     
     <!-- Main Content -->
@@ -305,5 +358,43 @@ $extraJs = '<script>
 </script>';
 ?>
 <?php endif; ?>
+
+<script>
+document.getElementById('accessToggleBtn')?.addEventListener('click', async function () {
+    const btn = this;
+    const memberId = btn.dataset.memberId;
+    const isEnabled = btn.dataset.currentState === 'enabled';
+    const action = isEnabled ? 'disable' : 'enable';
+
+    const confirmMsg = isEnabled
+        ? 'Disable biometric access for this member? They will be blocked at the door immediately.'
+        : 'Re-enable biometric access for this member?';
+
+    if (!confirm(confirmMsg)) return;
+
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner w-4 h-4"></div> Working...';
+
+    try {
+        const response = await fetch('<?php echo BASE_URL; ?>/modules/members/toggle-access.php', {
+            method: 'POST',
+            body: new URLSearchParams({ member_id: memberId, action })
+        });
+        const result = await response.json();
+        alert(result.message);
+        if (result.success) {
+            location.reload();
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+});
+</script>
 
 <?php require_once INCLUDES_PATH . '/footer.php'; ?>

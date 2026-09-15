@@ -118,11 +118,7 @@ $gymName = $settings['gym_name'] ?? 'FitLife Gym';
     <div class="px-4 py-4 border-t border-gray-700">
         <div class="space-y-2">
             <!-- Quick Actions -->
-            <a href="<?php echo BASE_URL; ?>/modules/members/test_fingerprint_capability.php" 
-               class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors">
-                <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                Test Bio
-            </a>
+            
             <a href="<?php echo BASE_URL; ?>/modules/pos/index.php" 
                class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-700 text-white transition-colors">
                 <i data-lucide="plus-circle" class="w-4 h-4"></i>

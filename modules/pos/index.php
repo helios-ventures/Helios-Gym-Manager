@@ -13,6 +13,7 @@ use Gym\Core\Auth;
 use Gym\Core\Database;
 use Gym\Core\Helper;
 use Gym\Core\Session;
+use Gym\Core\MemberAccess;
 
 Auth::requirePermission('pos', 'create');
 
@@ -91,11 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_sale'])) {
                             [$memberId, $item['id'], $startDate, $endDate, $item['total'], $paymentMethod, Auth::id()]
                         );
                         
+
                         // Update member expiry
                         Database::execute(
                             "UPDATE members SET expiry_date = ?, status = 'active' WHERE id = ?",
                             [$endDate, $memberId]
                         );
+
+                        $memberIdToSyncAccess = $memberId;
                     }
                 }
             }
@@ -107,6 +111,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_sale'])) {
             );
             
             Database::commit();
+
+            if (!empty($memberIdToSyncAccess)) {
+                $paidMember = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$memberIdToSyncAccess]);
+                if (!empty($paidMember['biometric_id'])) {
+                    $accessResult = MemberAccess::syncFromMembershipState($paidMember);
+                    if (!$accessResult['success']) {
+                        Session::setFlash('warning', 'Sale completed, but device access sync failed: ' . $accessResult['message']);
+                    }
+                }
+            }
             
             Auth::logActivity('sale_create', "Created sale {$invoiceNumber} for " . Helper::money($total));
             

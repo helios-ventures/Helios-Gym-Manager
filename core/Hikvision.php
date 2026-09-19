@@ -137,18 +137,20 @@ class Hikvision
     }
 
     /**
-     * Add a brand-new user to the device (enabled by default).
-     * Falls back to Modify if Record fails because the employeeNo already exists.
+     * Upsert a user's UserInfo record with the given enable state. Tries Record
+     * (create) first; most firmwares reject Record if the employeeNo already
+     * exists, so this falls back to Modify. Safe to call whether or not the
+     * employeeNo already exists on the device - this is what makes enableUser()
+     * usable both for restoring a previously-disabled member AND for
+     * provisioning a brand-new one that's never touched the device before.
      */
-    public function addUser($employeeNo, string $name, bool $enable = true): array
+    private function upsertUser(string $employeeNo, string $name, bool $enable, string $beginTime, string $endTime): array
     {
-        $employeeNo = (string)$employeeNo;
-        $payload = $this->buildUserInfo($employeeNo, $name, $enable);
+        $payload = $this->buildUserInfo($employeeNo, $name, $enable, $beginTime, $endTime);
 
         $result = $this->request('POST', '/ISAPI/AccessControl/UserInfo/Record?format=json', $payload);
 
         if (!$result['success']) {
-            error_log("Hikvision: Record failed for {$employeeNo} (HTTP {$result['http_code']}), retrying via Modify");
             $result = $this->request('PUT', '/ISAPI/AccessControl/UserInfo/Modify?format=json', $payload);
         }
 
@@ -156,36 +158,50 @@ class Hikvision
     }
 
     /**
-     * Update an existing user's name/validity window and enable state.
+     * Add/upsert a user, enabled by default. Also used internally by
+     * enableUser() - kept as a separate public method since "add a new member"
+     * reads more clearly than "enable" at call sites like registration.
      */
-    public function modifyUser($employeeNo, string $name, bool $enable, ?string $beginTime = null, ?string $endTime = null): array
+    public function addUser($employeeNo, string $name, bool $enable = true): array
     {
-        $payload = $this->buildUserInfo((string)$employeeNo, $name, $enable, $beginTime, $endTime);
-        return $this->request('PUT', '/ISAPI/AccessControl/UserInfo/Modify?format=json', $payload);
+        $employeeNo = (string)$employeeNo;
+        $wideBegin = date('Y-m-d\TH:i:s', strtotime('-1 day'));
+        $wideEnd   = date('Y-m-d\TH:i:s', strtotime('+10 years'));
+        return $this->upsertUser($employeeNo, $name, $enable, $wideBegin, $wideEnd);
     }
 
     /**
-     * Instantly block a member at the door (expired/suspended membership).
-     * The user record and door-right plan stay intact so re-enabling is immediate.
+     * Update an existing user's name/validity window and enable state.
+     * (Kept for callers that want to set a specific window; addUser()/enableUser()
+     * cover the common "just turn access on with a wide window" case.)
+     */
+    public function modifyUser($employeeNo, string $name, bool $enable, ?string $beginTime = null, ?string $endTime = null): array
+    {
+        $beginTime = $beginTime ?? date('Y-m-d\TH:i:s', strtotime('-1 day'));
+        $endTime   = $endTime   ?? date('Y-m-d\TH:i:s', strtotime('+10 years'));
+        return $this->upsertUser((string)$employeeNo, $name, $enable, $beginTime, $endTime);
+    }
+
+    /**
+     * Instantly block a member at the door (expired/suspended membership, or a
+     * manual staff toggle). The user record and door-right plan stay intact so
+     * re-enabling is immediate. Also upsert-safe (harmless if the user doesn't
+     * exist yet - just leaves them absent-and-disabled).
      */
     public function disableUser($employeeNo, string $name = ''): array
     {
         $now = date('Y-m-d\TH:i:s');
-        return $this->modifyUser($employeeNo, $name ?: ('Member ' . $employeeNo), false, $now, $now);
+        return $this->upsertUser((string)$employeeNo, $name ?: ('Member ' . $employeeNo), false, $now, $now);
     }
 
     /**
-     * Restore access for a renewed member.
+     * Restore/grant access for a member. Upsert-safe: works identically whether
+     * this employeeNo already exists on the device (re-enabling) or has never
+     * been added before (first-time provisioning, e.g. right after registration).
      */
     public function enableUser($employeeNo, string $name = ''): array
     {
-        return $this->modifyUser(
-            $employeeNo,
-            $name ?: ('Member ' . $employeeNo),
-            true,
-            date('Y-m-d\TH:i:s', strtotime('-1 day')),
-            date('Y-m-d\TH:i:s', strtotime('+10 years'))
-        );
+        return $this->addUser($employeeNo, $name ?: ('Member ' . $employeeNo), true);
     }
 
     /**
@@ -203,6 +219,81 @@ class Hikvision
         ];
 
         return $this->request('PUT', '/ISAPI/AccessControl/UserInfoDetail/Delete?format=json', $payload);
+    }
+
+    /**
+     * EXPERIMENTAL - prompt the terminal to enter face-collection mode for a
+     * given employeeNo, so whoever stands at the camera next gets captured and
+     * bound to that record.
+     *
+     * Hikvision's ISAPI for remote biometric enrollment is not consistent
+     * across access-control terminal firmware versions, and this endpoint has
+     * NOT been verified against your specific DS-K1T343MFWX / DS-K1T671
+     * firmware - it's the most commonly documented path for this device
+     * family, but your unit may expose something different. If this fails,
+     * run modules/attendance/debug-hikvision.php to dump what your firmware
+     * actually supports, and send me that output to correct this call.
+     */
+    public function promptFaceEnrollment($employeeNo): array
+    {
+        $payload = [
+            'CaptureFaceData' => [
+                'employeeNo' => (string)$employeeNo,
+            ],
+        ];
+
+        $result = $this->request('PUT', '/ISAPI/AccessControl/CaptureFaceData?format=json', $payload, 15);
+
+        return [
+            'success' => $result['success'],
+            'message' => $result['success']
+                ? 'Device is now waiting for a face capture - ask the member to look at the camera.'
+                : ('Face enrollment trigger failed: ' . ($result['message'] ?? ('HTTP ' . $result['http_code']))
+                   . '. This endpoint is unverified for your firmware - run debug-hikvision.php to check.'),
+            'raw' => $result['raw'],
+        ];
+    }
+
+    /**
+     * EXPERIMENTAL - same caveats as promptFaceEnrollment(), for fingerprint
+     * capture. $fingerIndex is which finger slot (0-9) to enroll into.
+     */
+    public function promptFingerprintEnrollment($employeeNo, int $fingerIndex = 1): array
+    {
+        $payload = [
+            'CaptureFingerPrintCond' => [
+                'employeeNo'    => (string)$employeeNo,
+                'fingerPrintID' => $fingerIndex,
+            ],
+        ];
+
+        $result = $this->request('PUT', '/ISAPI/AccessControl/CaptureFingerPrint?format=json', $payload, 15);
+
+        return [
+            'success' => $result['success'],
+            'message' => $result['success']
+                ? 'Device is now waiting for a fingerprint - ask the member to place their finger on the scanner.'
+                : ('Fingerprint enrollment trigger failed: ' . ($result['message'] ?? ('HTTP ' . $result['http_code']))
+                   . '. This endpoint is unverified for your firmware - run debug-hikvision.php to check.'),
+            'raw' => $result['raw'],
+        ];
+    }
+
+    /**
+     * Fetch the device's ISAPI capability documents - the ground truth for
+     * exactly which operations (including biometric enrollment) this specific
+     * unit/firmware actually supports. Use this to correct promptFaceEnrollment()/
+     * promptFingerprintEnrollment() if they don't work out of the box.
+     */
+    public function getCapabilities(): array
+    {
+        $system = $this->request('GET', '/ISAPI/System/capabilities?format=json');
+        $access = $this->request('GET', '/ISAPI/AccessControl/capabilities?format=json');
+
+        return [
+            'system'         => $system['raw'] ?? null,
+            'access_control' => $access['raw'] ?? null,
+        ];
     }
 
     /**

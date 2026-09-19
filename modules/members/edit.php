@@ -3,14 +3,36 @@ require_once dirname(__DIR__, 2) . '/config/config.php';
 use Gym\Core\Auth;
 use Gym\Core\Database;
 use Gym\Core\Helper;
+use Gym\Core\MemberAccess;
+
 Auth::requirePermission('members', 'edit');
 $memberId = intval($_GET['id'] ?? 0);
 $member = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$memberId]);
 if (!$member) { Helper::redirect('/modules/members/index.php', 'warning', 'Member not found'); }
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    Database::execute("UPDATE members SET first_name=?, last_name=?, email=?, phone=?, gender=?, date_of_birth=?, address=?, emergency_contact_name=?, emergency_contact_phone=?, height_cm=?, target_weight_kg=?, fitness_goal=?, health_notes=? WHERE id=?",
-        [$_POST['first_name'], $_POST['last_name'], $_POST['email'], $_POST['phone'], $_POST['gender'], $_POST['date_of_birth'] ?: null, $_POST['address'], $_POST['emergency_contact_name'], $_POST['emergency_contact_phone'], $_POST['height_cm'] ?: null, $_POST['target_weight_kg'] ?: null, $_POST['fitness_goal'], $_POST['health_notes'], $memberId]);
+    $newExpiryDate = $_POST['expiry_date'] ?: null;
+
+    Database::execute(
+        "UPDATE members SET first_name=?, last_name=?, email=?, phone=?, gender=?, date_of_birth=?, address=?, emergency_contact_name=?, emergency_contact_phone=?, height_cm=?, target_weight_kg=?, fitness_goal=?, health_notes=?, expiry_date=? WHERE id=?",
+        [$_POST['first_name'], $_POST['last_name'], $_POST['email'], $_POST['phone'], $_POST['gender'], $_POST['date_of_birth'] ?: null, $_POST['address'], $_POST['emergency_contact_name'], $_POST['emergency_contact_phone'], $_POST['height_cm'] ?: null, $_POST['target_weight_kg'] ?: null, $_POST['fitness_goal'], $_POST['health_notes'], $newExpiryDate, $memberId]
+    );
+
     \Gym\Core\Auth::logActivity('member_update', "Updated member {$member['member_code']}");
+
+    // If the expiry date changed, keep the device in sync (this also covers
+    // "extend membership by manual date adjustment" - a renewal isn't the
+    // only way expiry_date moves).
+    if ($newExpiryDate !== $member['expiry_date']) {
+        $updatedMember = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$memberId]);
+        if (!empty($updatedMember['biometric_id'])) {
+            $accessResult = MemberAccess::syncFromMembershipState($updatedMember);
+            if (!$accessResult['success']) {
+                Helper::redirect('/modules/members/view.php?id=' . $memberId, 'warning', 'Member updated, but device access sync failed: ' . $accessResult['message']);
+            }
+        }
+    }
+
     Helper::redirect('/modules/members/view.php?id=' . $memberId, 'success', 'Member updated successfully');
 }
 $pageTitle = 'Edit Member';
@@ -42,6 +64,13 @@ require_once INCLUDES_PATH . '/sidebar.php';
             <div><label class="block text-sm font-medium text-gray-700 mb-1">Target Weight (kg)</label><input type="number" name="target_weight_kg" value="<?php echo $member['target_weight_kg']; ?>" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-lg"></div>
             <div><label class="block text-sm font-medium text-gray-700 mb-1">Fitness Goal</label><select name="fitness_goal" class="w-full px-3 py-2 border border-gray-200 rounded-lg"><option value="general_fitness" <?php echo $member['fitness_goal']==='general_fitness'?'selected':''; ?>>General Fitness</option><option value="weight_loss" <?php echo $member['fitness_goal']==='weight_loss'?'selected':''; ?>>Weight Loss</option><option value="muscle_gain" <?php echo $member['fitness_goal']==='muscle_gain'?'selected':''; ?>>Muscle Gain</option><option value="maintenance" <?php echo $member['fitness_goal']==='maintenance'?'selected':''; ?>>Maintenance</option><option value="rehabilitation" <?php echo $member['fitness_goal']==='rehabilitation'?'selected':''; ?>>Rehabilitation</option></select></div>
         </div>
+
+        <div class="p-4 bg-amber-50 border border-amber-100 rounded-lg">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Membership Expiry Date</label>
+            <input type="date" name="expiry_date" value="<?php echo htmlspecialchars($member['expiry_date'] ?? ''); ?>" class="w-full px-3 py-2 border border-gray-200 rounded-lg">
+            <p class="text-xs text-amber-700 mt-1">Manually adjusting this pushes to the biometric device immediately - extending it restores access (unless the member was manually disabled by staff), pulling it into the past disables access.</p>
+        </div>
+
         <div><label class="block text-sm font-medium text-gray-700 mb-1">Health Notes</label><textarea name="health_notes" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-lg"><?php echo htmlspecialchars($member['health_notes'] ?? ''); ?></textarea></div>
         <div class="flex gap-3">
             <button type="submit" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Save Changes</button>

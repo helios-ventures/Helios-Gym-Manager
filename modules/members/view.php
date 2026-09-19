@@ -195,6 +195,18 @@ $daysUntil = $member['expiry_date'] ? Helper::daysUntil($member['expiry_date']) 
                     <i data-lucide="<?php echo !empty($member['biometric_enabled']) ? 'lock' : 'unlock'; ?>" class="w-4 h-4"></i>
                     <?php echo !empty($member['biometric_enabled']) ? 'Disable Access' : 'Enable Access'; ?>
                 </button>
+
+                <div class="grid grid-cols-2 gap-2 mt-3">
+                    <button type="button" onclick="promptEnrollment('face')"
+                            class="py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 text-xs font-medium flex items-center justify-center gap-1">
+                        <i data-lucide="scan-face" class="w-4 h-4"></i> Enroll Face
+                    </button>
+                    <button type="button" onclick="promptEnrollment('fingerprint')"
+                            class="py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 text-xs font-medium flex items-center justify-center gap-1">
+                        <i data-lucide="fingerprint" class="w-4 h-4"></i> Enroll Fingerprint
+                    </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">Click, then have the member stand at the terminal now. Enrollment triggers are experimental - if nothing happens at the device, see the note in Device Management.</p>
             <?php endif; ?>
         </div>
     </div>
@@ -395,6 +407,26 @@ document.getElementById('accessToggleBtn')?.addEventListener('click', async func
         btn.innerHTML = original;
     }
 });
+
+async function promptEnrollment(type) {
+    const memberId = <?php echo (int)$member['id']; ?>;
+    const label = type === 'face' ? 'face' : 'fingerprint';
+
+    if (!confirm('Prompt the device for ' + label + ' enrollment now? Have the member ready at the terminal before confirming.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('<?php echo BASE_URL; ?>/modules/members/enroll-biometric.php', {
+            method: 'POST',
+            body: new URLSearchParams({ member_id: memberId, type })
+        });
+        const result = await response.json();
+        alert(result.message);
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+}
 </script>
 
 <?php require_once INCLUDES_PATH . '/footer.php'; ?>

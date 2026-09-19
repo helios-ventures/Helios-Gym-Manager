@@ -10,6 +10,7 @@ use Gym\Core\Database;
 use Gym\Core\Helper;
 use Gym\Core\Validator;
 use Gym\Core\Session;
+use Gym\Core\MemberAccess;
 
 Auth::requirePermission('members', 'create');
 
@@ -56,12 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $endDate = date('Y-m-d', strtotime($startDate . ' + ' . $plan['duration_days'] . ' days'));
             
             // Insert member
-            //$memberId = Database::insert(
             $memberId = Database::insertAndGetId(
                 "INSERT INTO members (member_code, first_name, last_name, email, phone, gender, date_of_birth, 
                  address, emergency_contact_name, emergency_contact_phone, height_cm, current_weight_kg, 
-                 target_weight_kg, fitness_goal, health_notes, join_date, expiry_date, status, biometric_id) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)",
+                 target_weight_kg, fitness_goal, health_notes, join_date, expiry_date, status) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')",
                 [
                     $memberCode,
                     $data['first_name'],
@@ -80,9 +80,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $data['health_notes'] ?? null,
                     $startDate,
                     $endDate,
-                    $memberId ?? null
                 ]
             );
+
+            // Use the member's own DB id as their device employeeNo, matching
+            // the fallback convention already used elsewhere (devices.php's
+            // member picker) when no biometric_id has been explicitly set.
+            Database::execute("UPDATE members SET biometric_id = ? WHERE id = ?", [$memberId, $memberId]);
             
             // Create subscription
             Database::insert(
@@ -105,8 +109,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Database::commit();
             
             Auth::logActivity('member_create', "Created member {$memberCode}: {$data['first_name']} {$data['last_name']}");
-            
-            Helper::redirect('/modules/members/view.php?id=' . $memberId, 'success', 'Member registered successfully! Member code: ' . $memberCode);
+
+            // Provision the member on the Hikvision device now that the row (and
+            // its biometric_id) is committed. Done outside the transaction since
+            // this is an HTTP call - a slow/offline device shouldn't roll back
+            // the registration itself, just leave biometric_synced_at unset so
+            // it's visible as "not yet synced" and easy to retry from the profile.
+            $newMember = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$memberId]);
+            $deviceResult = MemberAccess::syncFromMembershipState($newMember);
+
+            $flashType = 'success';
+            $flashMessage = 'Member registered successfully! Member code: ' . $memberCode
+                . '. Head to their profile to enroll face/fingerprint at the terminal.';
+
+            if (!$deviceResult['success']) {
+                $flashType = 'warning';
+                $flashMessage = 'Member registered (code: ' . $memberCode . '), but device provisioning failed: '
+                    . $deviceResult['message'] . '. You can retry from the member profile before enrolling biometrics.';
+            }
+
+            Helper::redirect('/modules/members/view.php?id=' . $memberId, $flashType, $flashMessage);
             
         } catch (\Exception $e) {
             Database::rollback();

@@ -95,4 +95,54 @@ class MemberAccess
 
         return $deviceResult;
     }
+
+    /**
+     * Recompute whether a member SHOULD have device access based on their
+     * current status/expiry_date, and push a change only if needed.
+     *
+     * Use this (not enable()/disable() directly) anywhere expiry_date or status
+     * changes as a side effect of a business event: renewal, a POS subscription
+     * purchase, or a staff member manually editing the expiry date. It keeps
+     * the device in sync without every call site having to re-derive the logic.
+     *
+     * Deliberately does NOT touch access for a member whose access is off with
+     * disabled_reason = 'manual' - a staff-issued block (e.g. banned for
+     * conduct) should not be silently undone just because their subscription
+     * happens to look valid again. Only an explicit call to enable() (the
+     * toggle button) lifts a manual block.
+     *
+     * The direct enable()/disable() calls remain the right choice for the
+     * manual toggle button itself, since that's an explicit override, not a
+     * derived state.
+     */
+    public static function syncFromMembershipState(array $member): array
+    {
+        if (empty($member['biometric_id'])) {
+            return ['success' => true, 'message' => 'No biometric ID assigned - nothing to sync', 'skipped' => true];
+        }
+
+        $today = date('Y-m-d');
+        $isExpired = !empty($member['expiry_date']) && $member['expiry_date'] < $today;
+        $shouldBeEnabled = ($member['status'] ?? '') === 'active' && !$isExpired;
+        $isCurrentlyEnabled = !empty($member['biometric_enabled']);
+        $wasManuallyDisabled = !$isCurrentlyEnabled && ($member['disabled_reason'] ?? null) === 'manual';
+
+        if ($shouldBeEnabled && $wasManuallyDisabled) {
+            return [
+                'success' => true,
+                'skipped' => true,
+                'message' => 'Subscription looks valid, but access stays off (manually disabled) - re-enable from the member profile if that was intentional.',
+            ];
+        }
+
+        if ($shouldBeEnabled && (!$isCurrentlyEnabled || empty($member['biometric_synced_at']))) {
+            return self::enable($member);
+        }
+
+        if (!$shouldBeEnabled && $isCurrentlyEnabled) {
+            return self::disable($member, $isExpired ? 'expired' : 'manual');
+        }
+
+        return ['success' => true, 'skipped' => true, 'message' => 'No change needed'];
+    }
 }

@@ -23,11 +23,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     Database::insert("INSERT INTO member_subscriptions (member_id, plan_id, start_date, end_date, amount_paid, payment_method, status, created_by) VALUES (?, ?, ?, ?, ?, ?, 'active', ?)", [$memberId, $planId, $startDate, $endDate, $plan['price'], $_POST['payment_method'] ?? 'cash', \Gym\Core\Auth::id()]);
     Database::execute("UPDATE members SET expiry_date=?, status='active' WHERE id=?", [$endDate, $memberId]);
 
-    // Restore biometric door access now that the membership is active again.
-    // Re-fetch the member so MemberAccess sees the freshly updated row.
+    // Restore biometric door access now that the membership is active again
+    // (unless staff had manually disabled this member - see MemberAccess).
+    // Re-fetch the member so this sees the freshly updated expiry_date/status.
     $renewedMember = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$memberId]);
     if (!empty($renewedMember['biometric_id'])) {
-        $accessResult = MemberAccess::enable($renewedMember);
+        $accessResult = MemberAccess::syncFromMembershipState($renewedMember);
         if (!$accessResult['success']) {
             Session::setFlash('warning', 'Renewed, but device access sync failed: ' . $accessResult['message'] . '. Retry from the member profile.');
         }

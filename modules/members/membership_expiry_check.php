@@ -51,7 +51,8 @@ foreach ($expiring as $member) {
     Database::execute("UPDATE members SET status = 'expired' WHERE id = ?", [$member['id']]);
 
     if (!empty($member['biometric_id'])) {
-        $result = MemberAccess::disable($member, 'expired');
+        $freshMember = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$member['id']]);
+        $result = MemberAccess::syncFromMembershipState($freshMember);
         if (!$result['success']) {
             $disableFailures++;
             echo "  ! Device disable failed for {$member['member_code']}: {$result['message']}\n";

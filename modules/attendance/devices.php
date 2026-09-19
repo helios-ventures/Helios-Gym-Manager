@@ -11,6 +11,7 @@ use Gym\Core\Database;
 use Gym\Core\Helper;
 use Gym\Core\Session;
 use Gym\Core\Hikvision;
+use Gym\Core\AttendanceSync;
 
 Auth::requirePermission('attendance', 'manage');
 
@@ -120,6 +121,30 @@ if (isset($_GET['sync_users']) && $deviceId = intval($_GET['sync_users'])) {
     exit;
 }
 
+// Enable real-time event push from the device (webhook)
+if (isset($_GET['enable_events']) && $deviceId = intval($_GET['enable_events'])) {
+    $device = Database::fetchOne("SELECT * FROM zkteco_devices WHERE id = ?", [$deviceId]);
+
+    if ($device) {
+        $hik = hikvisionFromDevice($device);
+
+        if ($hik) {
+            if (empty($device['webhook_secret'])) {
+                $secret = bin2hex(random_bytes(16));
+                Database::execute("UPDATE zkteco_devices SET webhook_secret = ? WHERE id = ?", [$secret, $deviceId]);
+                $device['webhook_secret'] = $secret;
+            }
+
+            $webhookUrl = rtrim(BASE_URL, '/') . '/api/hikvision-webhook.php?token=' . $device['webhook_secret'];
+            $result = $hik->registerEventListener($webhookUrl);
+            Session::setFlash($result['success'] ? 'success' : 'danger', $result['message']);
+        }
+    }
+
+    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+    exit;
+}
+
 // Restart device
 if (isset($_GET['restart']) && $deviceId = intval($_GET['restart'])) {
     $device = Database::fetchOne("SELECT * FROM zkteco_devices WHERE id = ?", [$deviceId]);
@@ -156,108 +181,18 @@ if (isset($_GET['sync']) && $_GET['sync'] === 'device') {
         exit;
     }
 
-    // Pull since the last successful sync, capped at 7 days back the first time
-    $since = $device['last_sync']
-        ? date('Y-m-d\TH:i:sP', strtotime($device['last_sync']))
-        : date('Y-m-d\TH:i:sP', strtotime('-7 days'));
+    $result = AttendanceSync::pull($device);
 
-    $records = $hik->getAccessEvents($since);
-
-    if (empty($records)) {
-        Database::execute("UPDATE zkteco_devices SET last_sync = NOW() WHERE id = ?", [$device['id']]);
-        Session::setFlash('warning', 'No new access events found on device');
+    if (!$result['success']) {
+        Session::setFlash('danger', $result['message']);
         header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
         exit;
     }
 
-    $inserted = 0;
-    $updated = 0;
-    $skipped = 0;
-
-    foreach ($records as $r) {
-
-        $bioId = intval($r['employeeNo'] ?? 0);
-        $ts = strtotime($r['timestamp'] ?? '');
-
-        if (!$bioId || !$ts) {
-            $skipped++;
-            continue;
-        }
-
-        $punchTime = date('Y-m-d H:i:s', $ts);
-
-        // MEMBER LOOKUP - unknown IDs are ignored silently
-        $member = Database::fetchOne(
-            "SELECT id FROM members WHERE biometric_id = ? LIMIT 1",
-            [$bioId]
-        );
-
-        if (!$member) {
-            $skipped++;
-            continue;
-        }
-
-        $memberId = $member['id'];
-
-        // DUPLICATE CHECK
-        $duplicate = Database::fetchOne(
-            "SELECT id FROM attendance_logs WHERE biometric_id = ? AND check_in = ? LIMIT 1",
-            [$bioId, $punchTime]
-        );
-
-        if ($duplicate) {
-            $skipped++;
-            continue;
-        }
-
-        // CHECK TYPE - Hikvision face terminals report a verify mode string
-        $verifyMode = strtolower($r['verify_mode'] ?? '');
-        $checkType = 'face';
-        if (strpos($verifyMode, 'card') !== false) {
-            $checkType = 'card';
-        } elseif (strpos($verifyMode, 'fp') !== false || strpos($verifyMode, 'finger') !== false) {
-            $checkType = 'fingerprint';
-        }
-
-        // AUTO TOGGLE LOGIC - first punch = check in, next punch = check out
-        $openAttendance = Database::fetchOne(
-            "SELECT id, check_in FROM attendance_logs 
-             WHERE biometric_id = ? AND check_out IS NULL 
-             ORDER BY check_in DESC LIMIT 1",
-            [$bioId]
-        );
-
-        if ($openAttendance) {
-            $checkInTime = strtotime($openAttendance['check_in']);
-            $checkOutTime = strtotime($punchTime);
-
-            if ($checkOutTime <= $checkInTime) {
-                $skipped++;
-                continue;
-            }
-
-            $duration = round(($checkOutTime - $checkInTime) / 60);
-
-            Database::execute(
-                "UPDATE attendance_logs SET check_out = ?, duration_minutes = ?, status = 'present' WHERE id = ?",
-                [$punchTime, $duration, $openAttendance['id']]
-            );
-
-            $updated++;
-            continue;
-        }
-
-        Database::execute(
-            "INSERT INTO attendance_logs (member_id, biometric_id, device_id, check_in, check_type, status)
-             VALUES (?, ?, ?, ?, ?, 'present')",
-            [$memberId, $bioId, $device['id'], $punchTime, $checkType]
-        );
-
-        $inserted++;
-    }
-
-    Database::execute("UPDATE zkteco_devices SET last_sync = NOW() WHERE id = ?", [$device['id']]);
-
+    Session::setFlash(
+        'success',
+        "Synced successfully. {$result['inserted']} check-ins, {$result['updated']} check-outs, {$result['skipped']} skipped."
+    );
     Session::setFlash(
         'success',
         "Synced successfully. {$inserted} check-ins, {$updated} check-outs, {$skipped} skipped."
@@ -466,6 +401,9 @@ require_once INCLUDES_PATH . '/sidebar.php';
                                         </a>
                                         <a href="?sync_users=<?php echo $device['id']; ?>" class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Sync Users">
                                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                        </a>
+                                        <a href="?enable_events=<?php echo $device['id']; ?>" class="p-2 text-gray-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Enable Real-Time Events">
+                                            <i data-lucide="bell" class="w-4 h-4"></i>
                                         </a>
                                         <a href="?restart=<?php echo $device['id']; ?>" onclick="return confirm('Restart this device?')" class="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="Restart">
                                             <i data-lucide="power" class="w-4 h-4"></i>

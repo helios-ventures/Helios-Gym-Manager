@@ -22,6 +22,7 @@ use Gym\Core\Auth;
 use Gym\Core\Database;
 use Gym\Core\Helper;
 use Gym\Core\MemberAccess;
+use Gym\Core\AfricasTalking;
 
 // Days-before-expiry thresholds to send a reminder on. Each member's expiry
 // date only ever matches one of these on any given day, so no dedup is needed
@@ -51,7 +52,8 @@ foreach ($expiring as $member) {
     Database::execute("UPDATE members SET status = 'expired' WHERE id = ?", [$member['id']]);
 
     if (!empty($member['biometric_id'])) {
-        $result = MemberAccess::disable($member, 'expired');
+        $freshMember = Database::fetchOne("SELECT * FROM members WHERE id = ?", [$member['id']]);
+        $result = MemberAccess::syncFromMembershipState($freshMember);
         if (!$result['success']) {
             $disableFailures++;
             echo "  ! Device disable failed for {$member['member_code']}: {$result['message']}\n";
@@ -108,18 +110,33 @@ foreach (REMINDER_DAYS_BEFORE as $daysBefore) {
             : "Hi {$member['first_name']}, your membership at {$gymName} expires in {$daysBefore} day(s) on "
               . Helper::date($member['expiry_date']) . '. Renew soon to avoid interruption.';
 
-        // TODO: call a real SMS/email gateway here using the sms_api_key /
-        // email_smtp_* settings. For now this only logs the message, matching
-        // the Communication module's current (gateway-less) behaviour.
+        $atUsername = Auth::getSetting('sms_username', '');
+        $atApiKey = Auth::getSetting('sms_api_key', '');
+        $atSenderId = Auth::getSetting('sms_sender_id', '');
+
+        $sendStatus = 'sent';
+        if ($atUsername && $atApiKey && !empty($member['phone'])) {
+            $at = new AfricasTalking($atUsername, $atApiKey, $atSenderId);
+            $sendResult = $at->sendOne($member['phone'], $content);
+            $sendStatus = $sendResult['success'] ? 'sent' : 'failed';
+            if (!$sendResult['success']) {
+                echo "  ! SMS failed for {$member['member_code']}: {$sendResult['message']}\n";
+            }
+        } else {
+            // Not configured yet - logs only, same as before.
+            $sendStatus = 'sent';
+        }
+
         Database::insert(
             "INSERT INTO message_logs 
                 (template_id, recipient_type, recipient_id, recipient_phone, message_type, content, status, sent_by)
-             VALUES (?, 'single', ?, ?, 'sms', ?, 'sent', NULL)",
+             VALUES (?, 'single', ?, ?, 'sms', ?, ?, NULL)",
             [
                 $reminderTemplate['id'] ?? null,
                 $member['id'],
                 $member['phone'],
                 $content,
+                $sendStatus,
             ]
         );
 

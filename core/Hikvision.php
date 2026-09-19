@@ -110,7 +110,8 @@ class Hikvision
         bool $enable,
         ?string $beginTime = null,
         ?string $endTime = null,
-        string $doorNo = '1'
+        string $doorNo = '1',
+        string $gender = 'unknown'
     ): array {
         // Validity window is intentionally wide when enabled - access is controlled
         // purely by Valid.enable, the same way ZKTeco access is controlled by timezone.
@@ -122,6 +123,7 @@ class Hikvision
                 'employeeNo' => $employeeNo,
                 'name'       => substr($name, 0, 32),
                 'userType'   => 'normal',
+                'gender'     => in_array($gender, ['male', 'female'], true) ? $gender : 'unknown',
                 'doorRight'  => $doorNo,
                 'Valid'      => [
                     'enable'    => $enable,
@@ -144,9 +146,9 @@ class Hikvision
      * usable both for restoring a previously-disabled member AND for
      * provisioning a brand-new one that's never touched the device before.
      */
-    private function upsertUser(string $employeeNo, string $name, bool $enable, string $beginTime, string $endTime): array
+    private function upsertUser(string $employeeNo, string $name, bool $enable, string $beginTime, string $endTime, string $gender = 'unknown'): array
     {
-        $payload = $this->buildUserInfo($employeeNo, $name, $enable, $beginTime, $endTime);
+        $payload = $this->buildUserInfo($employeeNo, $name, $enable, $beginTime, $endTime, '1', $gender);
 
         $result = $this->request('POST', '/ISAPI/AccessControl/UserInfo/Record?format=json', $payload);
 
@@ -162,12 +164,12 @@ class Hikvision
      * enableUser() - kept as a separate public method since "add a new member"
      * reads more clearly than "enable" at call sites like registration.
      */
-    public function addUser($employeeNo, string $name, bool $enable = true): array
+    public function addUser($employeeNo, string $name, bool $enable = true, string $gender = 'unknown'): array
     {
         $employeeNo = (string)$employeeNo;
         $wideBegin = date('Y-m-d\TH:i:s', strtotime('-1 day'));
         $wideEnd   = date('Y-m-d\TH:i:s', strtotime('+10 years'));
-        return $this->upsertUser($employeeNo, $name, $enable, $wideBegin, $wideEnd);
+        return $this->upsertUser($employeeNo, $name, $enable, $wideBegin, $wideEnd, $gender);
     }
 
     /**
@@ -175,11 +177,11 @@ class Hikvision
      * (Kept for callers that want to set a specific window; addUser()/enableUser()
      * cover the common "just turn access on with a wide window" case.)
      */
-    public function modifyUser($employeeNo, string $name, bool $enable, ?string $beginTime = null, ?string $endTime = null): array
+    public function modifyUser($employeeNo, string $name, bool $enable, ?string $beginTime = null, ?string $endTime = null, string $gender = 'unknown'): array
     {
         $beginTime = $beginTime ?? date('Y-m-d\TH:i:s', strtotime('-1 day'));
         $endTime   = $endTime   ?? date('Y-m-d\TH:i:s', strtotime('+10 years'));
-        return $this->upsertUser((string)$employeeNo, $name, $enable, $beginTime, $endTime);
+        return $this->upsertUser((string)$employeeNo, $name, $enable, $beginTime, $endTime, $gender);
     }
 
     /**
@@ -188,10 +190,10 @@ class Hikvision
      * re-enabling is immediate. Also upsert-safe (harmless if the user doesn't
      * exist yet - just leaves them absent-and-disabled).
      */
-    public function disableUser($employeeNo, string $name = ''): array
+    public function disableUser($employeeNo, string $name = '', string $gender = 'unknown'): array
     {
         $now = date('Y-m-d\TH:i:s');
-        return $this->upsertUser((string)$employeeNo, $name ?: ('Member ' . $employeeNo), false, $now, $now);
+        return $this->upsertUser((string)$employeeNo, $name ?: ('Member ' . $employeeNo), false, $now, $now, $gender);
     }
 
     /**
@@ -199,9 +201,9 @@ class Hikvision
      * this employeeNo already exists on the device (re-enabling) or has never
      * been added before (first-time provisioning, e.g. right after registration).
      */
-    public function enableUser($employeeNo, string $name = ''): array
+    public function enableUser($employeeNo, string $name = '', string $gender = 'unknown'): array
     {
-        return $this->addUser($employeeNo, $name ?: ('Member ' . $employeeNo), true);
+        return $this->addUser($employeeNo, $name ?: ('Member ' . $employeeNo), true, $gender);
     }
 
     /**
@@ -293,6 +295,46 @@ class Hikvision
         return [
             'system'         => $system['raw'] ?? null,
             'access_control' => $access['raw'] ?? null,
+        ];
+    }
+
+    /**
+     * Register this server as an ISAPI event-notification target so the
+     * device pushes access events to $url as they happen, instead of us
+     * having to poll. This is one of the oldest, most standard ISAPI features
+     * (much more so than the biometric-enrollment triggers above), but the
+     * exact field shape can still vary slightly by firmware - verify with
+     * debug-hikvision.php if registration succeeds but events never arrive.
+     */
+    public function registerEventListener(string $url): array
+    {
+        $parsed = parse_url($url);
+        $host = $parsed['host'] ?? '';
+        $port = $parsed['port'] ?? 80;
+        $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+
+        $payload = [
+            'HttpHostNotification' => [
+                'id'                       => 1,
+                'url'                      => $path,
+                'protocolType'             => 'HTTP',
+                'parameterFormatType'      => 'JSON',
+                'addressingFormatType'     => 'ipaddress',
+                'ipAddress'                => $host,
+                'portNo'                   => (int)$port,
+                'httpAuthenticationMethod' => 'none',
+            ],
+        ];
+
+        $result = $this->request('PUT', '/ISAPI/Event/notification/httpHosts/1?format=json', $payload, 15);
+
+        return [
+            'success' => $result['success'],
+            'message' => $result['success']
+                ? 'Device will now push access events to your server in real time.'
+                : ('Failed to register event listener: ' . ($result['message'] ?? ('HTTP ' . $result['http_code']))
+                   . '. Run debug-hikvision.php to check the exact endpoint your firmware expects.'),
+            'raw' => $result['raw'],
         ];
     }
 

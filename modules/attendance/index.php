@@ -1,6 +1,6 @@
 <?php
 /**
- * Attendance Management - Daily attendance view with ZKTeco integration
+ * Attendance Management - Daily attendance view with Hikvision integration
  */
 
 require_once dirname(__DIR__, 2) . '/config/config.php';
@@ -8,7 +8,7 @@ require_once dirname(__DIR__, 2) . '/config/config.php';
 use Gym\Core\Auth;
 use Gym\Core\Database;
 use Gym\Core\Helper;
-use Gym\Core\ZKTeco;
+use Gym\Core\AttendanceSync;
 use Gym\Core\Session;
 use Gym\Core\Response;
 
@@ -67,140 +67,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     exit;
 }
 
-// Sync from ZKTeco device
-// Sync from ZKTeco device
+// Sync from Hikvision device (shared with the manual button in Attendance > Devices)
 if (isset($_GET['sync']) && $_GET['sync'] === 'device') {
     Auth::requirePermission('attendance', 'manage');
-    
+
     $device = Database::fetchOne(
-        "SELECT * FROM zkteco_devices WHERE is_default = 1 OR status = 'online' LIMIT 1"
+        "SELECT * FROM zkteco_devices WHERE device_type = 'hikvision' AND (is_default = 1 OR status = 'online') LIMIT 1"
     );
-    
+
     if (!$device) {
-        Session::setFlash('warning', 'No ZKTeco device configured or online');
+        Session::setFlash('warning', 'No Hikvision device configured or online');
         header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
         exit;
     }
-    
-    $zk = new ZKTeco($device['device_ip'], (int) $device['port']);
-    
-    if (!$zk->connect()) {
-        Session::setFlash('danger', 'Failed to connect to device at ' . $device['device_ip'] . ':' . $device['port']);
+
+    $result = AttendanceSync::pull($device);
+
+    if (!$result['success']) {
+        Session::setFlash('danger', $result['message']);
         header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
         exit;
     }
-    
-    $records = $zk->getAttendance();
-    $zk->disconnect();
-    
-    if (empty($records)) {
-        Session::setFlash('warning', 'No attendance records found on device');
-        header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
-        exit;
-    }
-    
-    $inserted = 0;
-    $updated = 0;
-    $skipped = 0;
-    
-    foreach ($records as $r) {
-        $deviceUserId = intval($r['id'] ?? ($r['userid'] ?? 0));
-        $rawTime = $r['timestamp'] ?? ($r['punch_time'] ?? '');
-        
-        $ts = strtotime($rawTime);
-        if (empty($rawTime) || $ts === false || $ts < 1) {
-            $skipped++;
-            continue;
-        }
-        $punchTime = date('Y-m-d H:i:s', $ts);
-        
-        $state = intval($r['state'] ?? 0);
-        $type = intval($r['type'] ?? 0);
-        
-        if (empty($deviceUserId)) {
-            $skipped++;
-            continue;
-        }
-        
-        // Map device type
-        $checkType = 'fingerprint';
-        if ($type === 1 || $type === 2) {
-            $checkType = 'card';
-        } elseif ($type === 3) {
-            $checkType = 'face';
-        }
-        
-        $isCheckout = in_array($state, [1, 3, 5]);
-        
-        // ─── CHECKOUT PAIRING ───
-        if ($isCheckout) {
-            $openRecord = Database::fetchOne(
-                "SELECT id, check_in FROM attendance_logs 
-                 WHERE biometric_id = ? AND DATE(check_in) = DATE(?) AND check_out IS NULL 
-                 ORDER BY check_in DESC LIMIT 1",
-                [$deviceUserId, $punchTime]
-            );
-            
-            if ($openRecord) {
-                $alreadyPaired = Database::fetchOne(
-                    "SELECT id FROM attendance_logs WHERE id = ? AND check_out = ?",
-                    [$openRecord['id'], $punchTime]
-                );
-                
-                if ($alreadyPaired) {
-                    $skipped++;
-                    continue;
-                }
-                
-                $checkIn = strtotime($openRecord['check_in']);
-                $checkOut = strtotime($punchTime);
-                $duration = max(0, round(($checkOut - $checkIn) / 60));
-                
-                Database::execute(
-                    "UPDATE attendance_logs 
-                     SET check_out = ?, duration_minutes = ?, status = 'present' 
-                     WHERE id = ?",
-                    [$punchTime, $duration, $openRecord['id']]
-                );
-                $updated++;
-                continue;
-            }
-        }
-        
-        // ─── DUPLICATE CHECK ───
-        $duplicate = Database::fetchOne(
-            "SELECT id FROM attendance_logs 
-             WHERE biometric_id = ? AND device_id = ? AND check_in = ?",
-            [$deviceUserId, $device['id'], $punchTime]
-        );
-        
-        if ($duplicate) {
-            $skipped++;
-            continue;
-        }
-        
-        // ─── INSERT ───
-        try {
-            Database::execute(
-                "INSERT INTO attendance_logs 
-                 (member_id, biometric_id, device_id, check_in, check_type, status, notes) 
-                 VALUES (?, ?, ?, ?, ?, 'present', ?)",
-                [
-                    $deviceUserId,
-                    $deviceUserId,
-                    $device['id'],
-                    $punchTime,
-                    $checkType,
-                    $isCheckout ? 'Unmatched checkout from device' : null
-                ]
-            );
-            $inserted++;
-        } catch (\Exception $e) {
-            $skipped++;
-        }
-    }
-    
-    Session::setFlash('success', "Synced: {$inserted} new, {$updated} paired, {$skipped} skipped from " . count($records) . " device records.");
+
+    Session::setFlash(
+        'success',
+        "Synced: {$result['inserted']} new, {$result['updated']} paired, {$result['skipped']} skipped from {$result['total_events']} device events."
+    );
     header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
     exit;
 }
@@ -441,7 +333,7 @@ ob_start();
         <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
             <h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <i data-lucide="cpu" class="w-5 h-5 text-indigo-500"></i>
-                ZKTeco Devices
+                Access Devices
             </h3>
             <div class="space-y-3">
                 <?php foreach ($devices as $device): ?>

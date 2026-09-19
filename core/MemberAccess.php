@@ -44,6 +44,12 @@ class MemberAccess
         return $name !== '' ? $name : ('Member ' . ($member['biometric_id'] ?? ''));
     }
 
+    private static function memberGender(array $member): string
+    {
+        $gender = strtolower($member['gender'] ?? '');
+        return in_array($gender, ['male', 'female'], true) ? $gender : 'unknown';
+    }
+
     /**
      * @param array  $member Full members row (needs id, biometric_id, first_name, last_name)
      * @param string $reason 'expired' or 'manual'
@@ -60,7 +66,7 @@ class MemberAccess
         if ($device) {
             $hik = self::client($device);
             $deviceResult = $hik
-                ? $hik->disableUser($member['biometric_id'], self::memberName($member))
+                ? $hik->disableUser($member['biometric_id'], self::memberName($member), self::memberGender($member))
                 : ['success' => false, 'message' => 'Device is missing username/password'];
         }
 
@@ -84,7 +90,7 @@ class MemberAccess
         if ($device) {
             $hik = self::client($device);
             $deviceResult = $hik
-                ? $hik->enableUser($member['biometric_id'], self::memberName($member))
+                ? $hik->enableUser($member['biometric_id'], self::memberName($member), self::memberGender($member))
                 : ['success' => false, 'message' => 'Device is missing username/password'];
         }
 
